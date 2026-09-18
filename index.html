@@ -333,8 +333,13 @@
   const btn = document.getElementById('access-submit');
   const label = btn.querySelector('span');
   const email = document.getElementById('access-email');
+  // Every signup is stored in the slp-gallery Supabase project (table
+  // early_access_signups). The publishable key can only INSERT there, and
+  // only one row per email, so it is safe to ship in the page.
+  const store = { url: 'https://udkfrzzaxwtmvamevnfl.supabase.co/rest/v1/early_access_signups', key: 'sb_publishable_-unHFs8_KCAN81Vvyg85Dg_1G2EsIvG' };
   const fallback = 'That didn\u2019t send. Email <a href="mailto:hello@slpmedia.pro?subject=SLP%20Media%20early%20access">hello@slpmedia.pro</a> instead.';
 
+  const finish = () => { form.innerHTML = '<p class="done"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>You\u2019re on the list. We\u2019ll be in touch.</p>'; };
   document.getElementById('nav-access').addEventListener('click', function (e) {
     e.preventDefault();
     form.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -350,22 +355,33 @@
       return;
     }
     btn.disabled = true; label.textContent = 'Sending'; note.textContent = '';
-    try {
-      const res = await fetch(form.action, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-        body: JSON.stringify({
-          access_key: form.access_key.value,
-          subject: form.subject.value,
-          from_name: form.from_name.value,
-          email: value,
-          page: location.href,
-          botcheck: form.botcheck.checked ? 'yes' : ''
-        })
-      });
+    if (form.botcheck.checked) { finish(); return; }   // honeypot: pretend it worked, store nothing
+    // Save the row and send the notification email in parallel. The signup
+    // counts if either lands; a 409 from the store means the email is
+    // already on the list, which is a success too.
+    const save = fetch(store.url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': store.key, 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ email: value, page: location.href, user_agent: navigator.userAgent.slice(0, 512) })
+    }).then(res => { if (!(res.ok || res.status === 409)) throw new Error('store ' + res.status); });
+    const notify = fetch(form.action, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({
+        access_key: form.access_key.value,
+        subject: form.subject.value,
+        from_name: form.from_name.value,
+        email: value,
+        page: location.href
+      })
+    }).then(async res => {
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) throw new Error(data.message || 'send failed');
-      form.innerHTML = '<p class="done"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>You\u2019re on the list. We\u2019ll be in touch.</p>';
+    });
+    try {
+      const results = await Promise.allSettled([save, notify]);
+      if (!results.some(r => r.status === 'fulfilled')) throw results[0].reason;
+      finish();
     } catch (err) {
       btn.disabled = false; label.textContent = 'Request early access';
       note.innerHTML = fallback;
