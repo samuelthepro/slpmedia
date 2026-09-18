@@ -242,10 +242,6 @@
     .cta, .cta svg, .access .row { transition: none; }
   }
 
-/* ---- nav: more than one tab ---- */
-.nav-links { display: flex; align-items: center; gap: 2px; }
-.nav-link[aria-current="page"] { color: var(--paper); background: var(--glass); }
-
 /* ---- inner pages (galleries) ---- */
 .page { padding: calc(120px + env(safe-area-inset-top, 0px)) var(--gutter) 24px; }
 .page-head {
@@ -306,6 +302,4 @@
 }
 @media (max-width: 520px) {
   .features { grid-template-columns: 1fr; }
-  .nav-links { gap: 0; }
-  .nav-link { padding: 8px 9px; letter-spacing: 0.12em; }
 }
